@@ -13,7 +13,7 @@ namespace SimpleHTTPServer {
 
       string url = $"http:\\\\127.0.0.1:{myServer.Port}";
 
-      Console.WriteLine("Server is running on url");
+      Console.WriteLine($"Server is running on {url}");
       OpenUrl(url);
       Console.ReadLine();
     }
