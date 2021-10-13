@@ -143,6 +143,15 @@ class HttpServer {
     }
   }
 
+  private bool IsPathAllowed(string path) {
+    try {
+      return new Uri(_rootDirectory).IsBaseOf(new Uri(path));
+    }
+    catch (Exception) {
+      return false;
+    }
+  }
+
   private void Process (HttpListenerContext context) {
     string filename = context.Request.Url.AbsolutePath;
     filename = HttpUtility.UrlDecode(filename);
@@ -160,7 +169,10 @@ class HttpServer {
 
     filename = Path.Combine(_rootDirectory, filename);
 
-    if (File.Exists(filename)) {
+    if (!IsPathAllowed(filename)) {
+      context.Response.StatusCode = (int) HttpStatusCode.Forbidden;
+    }
+    else if (File.Exists(filename)) {
       try {
         Stream input = new FileStream(filename, FileMode.Open);
 
