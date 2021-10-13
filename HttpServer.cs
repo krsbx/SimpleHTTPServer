@@ -7,6 +7,8 @@ using System.Net.Sockets;
 using System.Net;
 using System.IO;
 using System.Threading;
+using System.Web;
+using System.Linq;
 
 class HttpServer {
   private readonly string[] _indexFiles = {
@@ -82,8 +84,12 @@ class HttpServer {
         {".xml", "text/xml"},
         {".xpi", "application/x-xpinstall"},
         {".zip", "application/zip"},
+        {".wasm", "application/wasm"},
         #endregion
     };
+  private static IDictionary<string, string> _contentEncodingMappings = new Dictionary<string, string>(StringComparer.InvariantCultureIgnoreCase) {
+    {".gz", "gzip"},
+  };
   private Thread _serverThread;
   private string _rootDirectory;
   private HttpListener _listener;
@@ -99,21 +105,14 @@ class HttpServer {
   /// </summary>
   /// <param name="path">Directory path to serve.</param>
   /// <param name="port">Port of the server.</param>
-  public HttpServer (string path, int port) {
+  public HttpServer (string path, int port = 8000) {
+    port = GetOpenPort(port);
     this.Initialize(path, port);
   }
 
-  /// <summary>
-  /// Construct server with suitable port.
-  /// </summary>
-  /// <param name="path">Directory path to serve.</param>
-  public HttpServer (string path) {
-    //get an empty port
-    TcpListener l = new TcpListener(IPAddress.Loopback, 0);
-    l.Start();
-    int port = ( (IPEndPoint) l.LocalEndpoint ).Port;
-    l.Stop();
-    this.Initialize(path, port);
+  public static int GetOpenPort(int startPort = 2555) {
+    var usedPorts = System.Net.NetworkInformation.IPGlobalProperties.GetIPGlobalProperties().GetActiveTcpListeners().Select(p => p.Port).ToList();
+    return Enumerable.Range(startPort, 999).Where(port => !usedPorts.Contains(port)).FirstOrDefault();
   }
 
   /// <summary>
@@ -138,8 +137,18 @@ class HttpServer {
     }
   }
 
+  private bool IsPathAllowed(string path) {
+    try {
+      return new Uri(_rootDirectory).IsBaseOf(new Uri(path));
+    }
+    catch (Exception) {
+      return false;
+    }
+  }
+
   private void Process (HttpListenerContext context) {
     string filename = context.Request.Url.AbsolutePath;
+    filename = HttpUtility.UrlDecode(filename);
     Console.WriteLine(filename);
     filename = filename.Substring(1);
 
@@ -154,7 +163,10 @@ class HttpServer {
 
     filename = Path.Combine(_rootDirectory, filename);
 
-    if (File.Exists(filename)) {
+    if (!IsPathAllowed(filename)) {
+      context.Response.StatusCode = (int) HttpStatusCode.Forbidden;
+    }
+    else if (File.Exists(filename)) {
       try {
         Stream input = new FileStream(filename, FileMode.Open);
 
@@ -165,6 +177,10 @@ class HttpServer {
         context.Response.AddHeader("Date", DateTime.Now.ToString("r"));
         context.Response.AddHeader("Last-Modified", System.IO.File.GetLastWriteTime(filename).ToString("r"));
 
+        if (_contentEncodingMappings.TryGetValue(Path.GetExtension(filename), out var encoding)) {
+          context.Response.AddHeader("Content-Encoding", encoding);
+        }
+        
         byte[] buffer = new byte[ 1024 * 16 ];
         int nbytes;
         while (( nbytes = input.Read(buffer, 0, buffer.Length) ) > 0)
@@ -179,6 +195,25 @@ class HttpServer {
         context.Response.StatusCode = (int) HttpStatusCode.InternalServerError;
       }
 
+    } else if (Directory.Exists(filename)) {
+      // File browser
+
+      filename = Path.GetFullPath(filename + "/");
+      using (var writer = new StreamWriter(context.Response.OutputStream)) {
+        void WriteLink(string link, string text, string icon) => writer.Write("<a href=\"{0}\"><img src=\"{2}\"> {1}</a><br>", link, text, icon);
+        void WriteUri(Uri uri, string icon) => WriteLink(uri.ToString(), HttpUtility.HtmlEncode(HttpUtility.UrlDecode(uri.ToString())), icon);
+
+        var baseUri = new Uri(filename);
+        if (filename != _rootDirectory) WriteLink("../", "Back", "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAUElEQVR42mNgoAP4jwMTp3l+AXaMbsh/fJiQIf8fzMWPcRlCtAEwQ3CFBUFNBOSJs5EkA3A5lygDCMUIXgMIaUY3hHZhMDgMICFxER942DAAVeyEg1KZUZsAAAAASUVORK5CYII=");
+        writer.Write("<p>");
+        foreach (var elem in Directory.GetDirectories(filename)) {
+          WriteUri(baseUri.MakeRelativeUri(new Uri(elem + "/")), "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAOklEQVR42mNgoAP4jwMTp3l+AXaMbsh/fJiQIf8fzMWPcRlCtAEwQ3CFBVEG4DF01IBRA/4TzAeEMAD1u8MF0hnk0QAAAABJRU5ErkJggg==");
+        }
+        writer.Write("<p>");
+        foreach (var elem in Directory.GetFiles(filename)) {
+          WriteUri(baseUri.MakeRelativeUri(new Uri(elem)), "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQAgMAAABinRfyAAAACVBMVEUAAAAAAAD///+D3c/SAAAAAXRSTlMAQObYZgAAAEBJREFUCNdjYAAB0dAABgapVVMYGCRnRoJYsxwYJCOjJgBZU0MYJMPCUoCsVUsYJKdOhbFSU2GssFAoSzQ0NAQADkYWX7FoSfoAAAAASUVORK5CYII=");
+        }
+      }
     } else {
       context.Response.StatusCode = (int) HttpStatusCode.NotFound;
     }
