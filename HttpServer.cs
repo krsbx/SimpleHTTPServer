@@ -83,8 +83,12 @@ class HttpServer {
         {".xml", "text/xml"},
         {".xpi", "application/x-xpinstall"},
         {".zip", "application/zip"},
+        {".wasm", "application/wasm"},
         #endregion
     };
+  private static IDictionary<string, string> _contentEncodingMappings = new Dictionary<string, string>(StringComparer.InvariantCultureIgnoreCase) {
+    {".gz", "gzip"},
+  };
   private Thread _serverThread;
   private string _rootDirectory;
   private HttpListener _listener;
@@ -167,6 +171,10 @@ class HttpServer {
         context.Response.AddHeader("Date", DateTime.Now.ToString("r"));
         context.Response.AddHeader("Last-Modified", System.IO.File.GetLastWriteTime(filename).ToString("r"));
 
+        if (_contentEncodingMappings.TryGetValue(Path.GetExtension(filename), out var encoding)) {
+          context.Response.AddHeader("Content-Encoding", encoding);
+        }
+        
         byte[] buffer = new byte[ 1024 * 16 ];
         int nbytes;
         while (( nbytes = input.Read(buffer, 0, buffer.Length) ) > 0)
