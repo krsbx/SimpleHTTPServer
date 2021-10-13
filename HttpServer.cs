@@ -201,6 +201,25 @@ class HttpServer {
         context.Response.StatusCode = (int) HttpStatusCode.InternalServerError;
       }
 
+    } else if (Directory.Exists(filename)) {
+      // File browser
+
+      filename = Path.GetFullPath(filename + "/");
+      using (var writer = new StreamWriter(context.Response.OutputStream)) {
+        void WriteLink(string link, string text, string icon) => writer.Write("<a href=\"{0}\"><img src=\"{2}\"> {1}</a><br>", link, text, icon);
+        void WriteUri(Uri uri, string icon) => WriteLink(uri.ToString(), HttpUtility.HtmlEncode(HttpUtility.UrlDecode(uri.ToString())), icon);
+
+        var baseUri = new Uri(filename);
+        if (filename != _rootDirectory) WriteLink("../", "Back", "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAUElEQVR42mNgoAP4jwMTp3l+AXaMbsh/fJiQIf8fzMWPcRlCtAEwQ3CFBUFNBOSJs5EkA3A5lygDCMUIXgMIaUY3hHZhMDgMICFxER942DAAVeyEg1KZUZsAAAAASUVORK5CYII=");
+        writer.Write("<p>");
+        foreach (var elem in Directory.GetDirectories(filename)) {
+          WriteUri(baseUri.MakeRelativeUri(new Uri(elem + "/")), "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAOklEQVR42mNgoAP4jwMTp3l+AXaMbsh/fJiQIf8fzMWPcRlCtAEwQ3CFBVEG4DF01IBRA/4TzAeEMAD1u8MF0hnk0QAAAABJRU5ErkJggg==");
+        }
+        writer.Write("<p>");
+        foreach (var elem in Directory.GetFiles(filename)) {
+          WriteUri(baseUri.MakeRelativeUri(new Uri(elem)), "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQAgMAAABinRfyAAAACVBMVEUAAAAAAAD///+D3c/SAAAAAXRSTlMAQObYZgAAAEBJREFUCNdjYAAB0dAABgapVVMYGCRnRoJYsxwYJCOjJgBZU0MYJMPCUoCsVUsYJKdOhbFSU2GssFAoSzQ0NAQADkYWX7FoSfoAAAAASUVORK5CYII=");
+        }
+      }
     } else {
       context.Response.StatusCode = (int) HttpStatusCode.NotFound;
     }
