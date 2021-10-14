@@ -147,8 +147,7 @@ class HttpServer {
   }
 
   private void Process (HttpListenerContext context) {
-    string filename = context.Request.Url.AbsolutePath;
-    filename = HttpUtility.UrlDecode(filename);
+    string filename = HttpUtility.UrlDecode(context.Request.Url.AbsolutePath);
     Console.WriteLine(filename);
     filename = filename.Substring(1);
 
