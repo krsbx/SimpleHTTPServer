@@ -167,7 +167,7 @@ class HttpServer {
     }
     else if (File.Exists(filename)) {
       try {
-        Stream input = new FileStream(filename, FileMode.Open);
+        Stream input = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
 
         //Adding permanent http response headers
         string mime;
