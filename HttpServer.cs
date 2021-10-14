@@ -147,8 +147,7 @@ class HttpServer {
   }
 
   private void Process (HttpListenerContext context) {
-    string filename = context.Request.Url.AbsolutePath;
-    filename = HttpUtility.UrlDecode(filename);
+    string filename = HttpUtility.UrlDecode(context.Request.Url.AbsolutePath);
     Console.WriteLine(filename);
     filename = filename.Substring(1);
 
@@ -168,7 +167,7 @@ class HttpServer {
     }
     else if (File.Exists(filename)) {
       try {
-        Stream input = new FileStream(filename, FileMode.Open);
+        Stream input = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
 
         //Adding permanent http response headers
         string mime;
